@@ -42,14 +42,20 @@ class ReplayStats
   end
 end
 
+
+raise "Usage: ruby statInput.rb <replayFolder>" unless ARGV.first
+replayFolder = ARGV.first
+
+
 system("rm -rf 'jsonFiles/'")
 system("mkdir 'jsonFiles'")
-Dir['./ReplayFiles/*'].each { |file|
+Dir["#{replayFolder}*"].each { |file|
   system("./rattletrap-6.2.2-osx -c < #{file} > jsonFiles/#{File.basename(file, '.replay')}.json")
 }
 
+
 gameStats = Dir['./jsonFiles/*'].map { |file|
-  replayFile = "./ReplayFiles/#{File.basename(file, '.json')}.replay"
+  replayFile = "#{replayFolder}#{File.basename(file, '.json')}.replay"
   ReplayStats.new(file, File.mtime(replayFile))
 }
 
@@ -66,6 +72,9 @@ gameStats.each { |game|
       "#{player.teamID == game.jubi.teamID ? 1 : 0})" 
   }
 }
+
 puts "#{wins} wins  /  #{losses} losses"
 
+
+system("rm -rf 'jsonFiles/'")
 db.close
