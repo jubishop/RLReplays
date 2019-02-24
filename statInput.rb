@@ -66,10 +66,13 @@ gameStats.each { |game|
   game.won? ? wins += 1 : losses += 1
   db.execute "INSERT INTO game(Date, OurScore, TheirScore) " +
     "VALUES(#{game.date.to_i}, #{game.ourScore}, #{game.theirScore})"
+  game_id = db.last_insert_row_id
   game.players.each { |name, player|
-    db.execute "INSERT INTO performance(Name, Assists, Goals, Saves, Score, Shots, OurTeam) " +
-      "VALUES('#{name}', #{player.assists}, #{player.goals}, #{player.saves}, #{player.score}, #{player.shots}, " +
-      "#{player.teamID == game.jubi.teamID ? 1 : 0})" 
+    command = "INSERT INTO performance(Name, GameID, Assists, Goals, Saves, Score, Shots, OurTeam) " +
+      "VALUES(#{name.dump}, #{game_id}, #{player.assists}, #{player.goals}, " +
+      "#{player.saves}, #{player.score}, #{player.shots}, " +
+      "#{player.teamID == game.jubi.teamID ? 1 : 0})"
+    db.execute command
   }
 }
 
