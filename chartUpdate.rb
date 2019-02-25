@@ -26,6 +26,7 @@ require 'sqlite3'
 
 db = SQLite3::Database.open "replays.db"
 games = (db.execute "SELECT * from game").map { |game| Game.new(*game) }
+gamesByID = games.map { |game| [game.id, game] }.to_h
 performances = (db.execute "SELECT * from performance").map { |performance| Performance.new(*performance) }
 
 totals = {"jubi" => Hash.new(0), "FezTheDispenser" => Hash.new(0)}
@@ -40,12 +41,20 @@ performances.each { |performance|
 }
 puts totals
 
-osascript("tell application \"Numbers\"
+rows = {"jubi" => 2, "FezTheDispenser" => 3}
+columns = {:score => "B", :goals => "C", :saves => "D", :assists => "E", :shots => "F"}
+setString = rows.map { |name, row|
+  columns.map { |attribute, column|
+    "set the value of cell \"#{column}#{row}\" to #{totals[name][attribute] / games.size.to_f}"
+  }.join("\n")
+}.join("\n")
+
+osascript("
+tell application \"Numbers\"
   activate
   open \"/Users/jubishop/Desktop/ReplayWork/Charts.numbers\"
-  set totalsTable to the first table of the first sheet of document 1
-  tell totalsTable
-    set the value of cell \"B2\" to #{totals["jubi"][:score]}
+  tell the first table of the first sheet of document 1
+    #{setString}
   end tell
 end tell")
 
