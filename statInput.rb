@@ -2,6 +2,7 @@ require 'json'
 require 'PP'
 require 'sqlite3'
 
+# holds all the stats for one player performance in one game
 class Player
   attr_accessor :name, :assists, :goals, :saves, :score, :shots, :teamID
   def initialize(stats)
@@ -19,6 +20,7 @@ class Player
   end
 end
 
+# holds all the stats about a specific replay
 class ReplayStats
   attr_accessor :date, :players, :ourScore, :theirScore
   def initialize(file, date)
@@ -46,17 +48,23 @@ end
 raise "Usage: ruby statInput.rb <replayFolder>" unless ARGV.first
 replayFolder = ARGV.first
 
+# clear out old jsonFiles temp directory
 system("rm -rf 'jsonFiles/'")
 system("mkdir 'jsonFiles'")
+
+# generate json file out of every replay file in given folder
 Dir["#{replayFolder}*"].each { |file|
   system("./rattletrap-6.2.2-osx -c < #{file} > jsonFiles/#{File.basename(file, '.replay')}.json")
 }
 
+# create a ReplayStats object off every json file generated
 gameStats = Dir['./jsonFiles/*'].map { |file|
   replayFile = "#{replayFolder}#{File.basename(file, '.json')}.replay"
   ReplayStats.new(file, File.mtime(replayFile))
 }
+system("rm -rf 'jsonFiles/'")
 
+# open the db and piipe all the data into it
 db = SQLite3::Database.open "replays.db"
 wins, losses = 0, 0
 gameStats.each { |game|
@@ -72,8 +80,6 @@ gameStats.each { |game|
     db.execute command
   }
 }
+db.close
 
 puts "#{wins} wins  /  #{losses} losses"
-
-system("rm -rf 'jsonFiles/'")
-db.close
