@@ -28,6 +28,7 @@ db = SQLite3::Database.open "replays.db"
 games = (db.execute "SELECT * from game").map { |game| Game.new(*game) }
 gamesByID = games.map { |game| [game.id, game] }.to_h
 performances = (db.execute "SELECT * from performance").map { |performance| Performance.new(*performance) }
+db.close
 
 totals = {"jubi" => Hash.new(0), "FezTheDispenser" => Hash.new(0)}
 performances.each { |performance|
@@ -39,7 +40,6 @@ performances.each { |performance|
     totals[performance.name][:shots] += performance.shots
   end
 }
-puts totals
 
 rows = {"jubi" => 2, "FezTheDispenser" => 3}
 columns = {:score => "B", :goals => "C", :saves => "D", :assists => "E", :shots => "F"}
@@ -57,5 +57,3 @@ tell application \"Numbers\"
     #{setString}
   end tell
 end tell")
-
-db.close
