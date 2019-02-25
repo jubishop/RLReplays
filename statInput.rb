@@ -46,19 +46,16 @@ end
 raise "Usage: ruby statInput.rb <replayFolder>" unless ARGV.first
 replayFolder = ARGV.first
 
-
 system("rm -rf 'jsonFiles/'")
 system("mkdir 'jsonFiles'")
 Dir["#{replayFolder}*"].each { |file|
   system("./rattletrap-6.2.2-osx -c < #{file} > jsonFiles/#{File.basename(file, '.replay')}.json")
 }
 
-
 gameStats = Dir['./jsonFiles/*'].map { |file|
   replayFile = "#{replayFolder}#{File.basename(file, '.json')}.replay"
   ReplayStats.new(file, File.mtime(replayFile))
 }
-
 
 db = SQLite3::Database.open "replays.db"
 wins, losses = 0, 0
@@ -77,7 +74,6 @@ gameStats.each { |game|
 }
 
 puts "#{wins} wins  /  #{losses} losses"
-
 
 system("rm -rf 'jsonFiles/'")
 db.close
