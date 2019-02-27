@@ -1,5 +1,23 @@
+require 'PP'
+
+# TODO: Genericize the hard-coded "jubi" and "FezTheDispenser" logic
+# TODO: Manage row size of Trends table automatically
+
 def osascript(script)
   system 'osascript', *script.split(/\n/).map { |line| ['-e', line] }.flatten
+end
+
+require 'date'
+class Time
+  def to_datetime
+    # Convert seconds + microseconds into a fractional number of seconds
+    seconds = sec + Rational(usec, 10**6)
+
+    # Convert a UTC offset measured in minutes to one measured in a
+    # fraction of a day.
+    offset = Rational(utc_offset, 60 * 60 * 24)
+    DateTime.new(year, month, day, hour, min, seconds, offset)
+  end
 end
 
 class Game
@@ -26,10 +44,29 @@ require 'sqlite3'
 
 # pull out all the data
 db = SQLite3::Database.open "replays.db"
-games = (db.execute "SELECT * from game").map { |game| Game.new(*game) }
-gamesByID = games.map { |game| [game.id, game] }.to_h
+games = (db.execute "SELECT * from game").map { |game| Game.new(*game) }.sort_by{|game| game.date}
 performances = (db.execute "SELECT * from performance").map { |performance| Performance.new(*performance) }
 db.close
+
+# group data by ID
+gamesByID = games.map { |game| [game.id, game] }.to_h
+performancesByID = performances.group_by {|per| per.gameID}
+epoch = Date.new(1970,1,1)
+gamesByDay = games.group_by { |game| (Time.at(game.date).to_datetime - epoch).to_i }.to_h
+# tally wins/scores based on the game of the session
+sessionStats = []
+gamesByDay.each { |day, session|
+  session.each_index { |game_index|
+    sessionStats[game_index] ||= {"jubi" => 0, "FezTheDispenser" => 0, :games => 0, :wins => 0}
+    sessionStats[game_index][:games] += 1
+    sessionStats[game_index][:wins] += 1 if (session[game_index].ourScore > session[game_index].theirScore)
+    daysPerformances = performancesByID[session[game_index].id]
+    ["jubi", "FezTheDispenser"].each { |name|
+      results = daysPerformances.find{ |performance| performance.name == name}
+      sessionStats[game_index][name] += results.score
+    }
+  }
+}
 
 # tally all the data into a lost and won hash
 winTotals = {"jubi" => Hash.new(0), "FezTheDispenser" => Hash.new(0)}
@@ -51,6 +88,7 @@ totals = Hash[winTotals.map { |key, total|
   [key, Hash[total.map { |attrib, val| [attrib, val + lossTotals[key][attrib]] }]]
 }]
 
+
 # count our win/loss ratio
 wonGames, lostGames = 0, 0
 games.each { |game|
@@ -60,12 +98,14 @@ games.each { |game|
     lostGames += 1
   end
 }
-puts "#{wonGames} wins, #{lostGames} lost, total"
+puts "#{wonGames} wins, #{lostGames} lost"
 
 # rows and columns to store data in Numbers spreadsheet
 rows = {"jubi" => 2, "FezTheDispenser" => 3}
 columns = {:score => "B", :goals => "C", :saves => "D", :assists => "E", :shots => "G"}
+trendColumns = {:games => "E", :wins => "F", "jubi" => "A", "FezTheDispenser" => "B"}
 
+# update the chart with everything
 osascript("
 tell application \"Numbers\"
   activate
@@ -93,6 +133,15 @@ tell application \"Numbers\"
       rows.map { |name, row|
         columns.map { |attribute, column|
           "set the value of cell \"#{column}#{row}\" to #{lossTotals[name][attribute] / lostGames.to_f}"
+        }.join("\n")
+      }.join("\n")
+    }
+  end tell
+  tell the fourth table of the first sheet of document 1
+    #{
+      sessionStats.each_with_index.map { |session, gameNumber|
+        trendColumns.map { |attribute, column|
+          "set the value of cell \"#{column}#{gameNumber+2}\" to #{session[attribute]}"
         }.join("\n")
       }.join("\n")
     }
