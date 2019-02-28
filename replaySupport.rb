@@ -1,5 +1,57 @@
-NAMES = ['jubi', 'FezTheDispenser']
-PERFORMANCE_COLUMNS = [:id, :date, :team, :name, :platform, :duration, :score, :goals, :assists, :saves, :shots, :bpm, :amount_collected, :amount_collected_big_pads, :amount_collected_small_pads, :count_collected_big_pads, :count_collected_small_pads, :amount_stolen, :amount_stolen_big_pads, :amount_stolen_small_pads, :count_stolen_big_pads, :count_stolen_small_pads, :zero_boost_time, :avg_speed, :total_distance, :time_slow_speed, :time_boost_speed, :time_supersonic_speed, :time_on_ground, :time_low_in_air, :time_high_in_air, :avg_distance_to_ball, :avg_distance_to_ball_has_possession, :avg_distance_to_ball_no_possession, :time_behind_ball, :time_in_front_of_ball, :time_defensive_half, :time_offensive_half, :time_defensive_third, :time_neutral_third, :time_offensive_third, :demos_inflicted, :demos_taken]
+require 'date'
+
+AUTH_KEY = 'DgzegKeRKU4ajZZ9lBXHwx6qUVcZoXzqoDcbBilM'
+
+NAMES = [
+  'jubi',
+  'FezTheDispenser'
+]
+  
+PERFORMANCE_COLUMNS = [
+  :id,
+  :date,
+  :team,
+  :name,
+  :platform,
+  :duration,
+  :score,
+  :goals,
+  :assists,
+  :saves,
+  :shots,
+  :bpm,
+  :amount_collected,
+  :amount_collected_big_pads,
+  :amount_collected_small_pads,
+  :count_collected_big_pads,
+  :count_collected_small_pads,
+  :amount_stolen,
+  :amount_stolen_big_pads,
+  :amount_stolen_small_pads,
+  :count_stolen_big_pads,
+  :count_stolen_small_pads,
+  :zero_boost_time,
+  :avg_speed,
+  :total_distance,
+  :time_slow_speed,
+  :time_boost_speed,
+  :time_supersonic_speed,
+  :time_on_ground,
+  :time_low_in_air,
+  :time_high_in_air,
+  :avg_distance_to_ball,
+  :avg_distance_to_ball_has_possession,
+  :avg_distance_to_ball_no_possession,
+  :time_behind_ball,
+  :time_in_front_of_ball,
+  :time_defensive_half,
+  :time_offensive_half,
+  :time_defensive_third,
+  :time_neutral_third,
+  :time_offensive_third,
+  :demos_inflicted,
+  :demos_taken
+]
 
 class String
   def titleize

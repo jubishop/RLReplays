@@ -4,8 +4,6 @@ require 'sqlite3'
 
 require_relative 'replaySupport.rb'
 
-AUTH_KEY = 'DgzegKeRKU4ajZZ9lBXHwx6qUVcZoXzqoDcbBilM'
-
 raise "Usage: ruby statInput.rb <replayFolder>" unless ARGV.first
 replayFolder = ARGV.first
 
