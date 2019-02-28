@@ -2,84 +2,88 @@ require 'json'
 require 'PP'
 require 'sqlite3'
 
-# holds all the stats for one player performance in one game
-class Player
-  attr_accessor :name, :assists, :goals, :saves, :score, :shots, :teamID
-  def initialize(stats)
-    @name = stats['Name']['value']['str']
-    @assists = stats['Assists']['value']['int']
-    @goals = stats['Goals']['value']['int']
-    @saves = stats['Saves']['value']['int']
-    @score = stats['Score']['value']['int']
-    @shots = stats['Shots']['value']['int']
-    @teamID = stats['Team']['value']['int']
-  end
-
-  def to_h
-    [name, self]
+class String
+  def titleize
+    split(/(\W)/).map(&:capitalize).join
   end
 end
 
-# holds all the stats about a specific replay
-class ReplayStats
-  attr_accessor :date, :players, :ourScore, :theirScore
-  def initialize(file, date)
-    @date = date
-    @data = JSON::parse(File.open(file).read)['header']['body']['properties']['value']
-    @players = @data['PlayerStats']['value']['array'].map { |stats|
-      Player.new(stats['value']).to_h
-    }.to_h
-    team0Score = @data.has_key?('Team0Score') ? @data['Team0Score']['value']['int'] : 0
-    team1Score = @data.has_key?('Team1Score') ? @data['Team1Score']['value']['int'] : 0
-    @ourScore, @theirScore = *(self.jubi.teamID == 0 ? [team0Score, team1Score] : [team1Score, team0Score])
-  end
-
-  def won?
-    @ourScore > @theirScore
-  end
-
-  def method_missing(name, *args, &block)
-    super unless @players.has_key? name.to_s
-    @players[name.to_s]
+class Game
+  attr_accessor :date, :won
+  def initialize(*args)
+    @date, @won = *args
   end
 end
 
+AUTH_KEY = 'DgzegKeRKU4ajZZ9lBXHwx6qUVcZoXzqoDcbBilM'
+NAMES = ['jubi', 'FezTheDispenser']
 
 raise "Usage: ruby statInput.rb <replayFolder>" unless ARGV.first
 replayFolder = ARGV.first
 
-# clear out old jsonFiles temp directory
-system("rm -rf 'jsonFiles/'")
-system("mkdir 'jsonFiles'")
-
-# generate json file out of every replay file in given folder
-Dir["#{replayFolder}*"].each { |file|
-  system("./rattletrap-6.2.2-osx -c < #{file} > jsonFiles/#{File.basename(file, '.replay')}.json")
-}
-
-# create a ReplayStats object off every json file generated
-gameStats = Dir['./jsonFiles/*'].map { |file|
-  replayFile = "#{replayFolder}#{File.basename(file, '.json')}.replay"
-  ReplayStats.new(file, File.mtime(replayFile))
-}
-system("rm -rf 'jsonFiles/'")
-
-# open the db and piipe all the data into it
+# open DB
 db = SQLite3::Database.open "replays.db"
-wins, losses = 0, 0
-gameStats.each { |game|
-  game.won? ? wins += 1 : losses += 1
-  db.execute "INSERT INTO game(Date, OurScore, TheirScore) " +
-    "VALUES(#{game.date.to_i}, #{game.ourScore}, #{game.theirScore})"
-  game_id = db.last_insert_row_id
-  game.players.each { |name, player|
-    command = "INSERT INTO performance(Name, GameID, Assists, Goals, Saves, Score, Shots, OurTeam) " +
-      "VALUES(#{name.dump}, #{game_id}, #{player.assists}, #{player.goals}, " +
-      "#{player.saves}, #{player.score}, #{player.shots}, " +
-      "#{player.teamID == game.jubi.teamID ? 1 : 0})"
-    db.execute command
-  }
-}
-db.close
 
-puts "#{wins} wins  /  #{losses} losses"
+# cache existing games to skip any dupes
+games = (db.execute "SELECT * from game").map { |game| Game.new(*game) }
+gamesByDate = games.map { |game| [game.date, game] }.to_h
+
+# gather csv file from ballchasing.com for every new replay file in given folder
+Dir["#{replayFolder}*"].each { |file|
+  # skip this one if already stored in db
+  gameDate = File.mtime(file).to_i
+  if (gamesByDate.has_key? gameDate)
+    puts "Skipped #{file}"
+    next
+  end
+
+  # upload Replay to ballchasing and wait for processing
+  response = `curl -v -F file=@#{file} -H Authorization:#{AUTH_KEY} https://ballchasing.com/api/v2/upload`
+  replayID = JSON::parse(response)['id']
+  
+  # get and parse CSV file associated with uploaded replay
+  containsJubi, tries = false, 0
+  while (not containsJubi and tries < 3)
+    sleep 5 # need to sleep until we have it
+    csv_data = `curl -L http://ballchasing.com/dl/stats/players/#{replayID}/#{replayID}-players.csv`
+    containsJubi = csv_data.include? "jubi"
+    tries += 1
+  end
+  raise "Could not fetch csv" if (tries >= 3)
+
+  header, *rows = csv_data.split("\n")
+  headers = header.split(';').map { |header| header.titleize }
+  playerData = rows.map { |row|
+    row.split(';').each_with_index.map { |attribute, index|
+      [headers[index], attribute]
+    }.to_h
+  }
+  
+  # calculate dates, scores, and winners/losers per game
+  ourScore, theirScore = 0, 0
+  playerData.each { |player|
+    if (NAMES.include? player['Player Name'])
+      ourScore += player['Goals'].to_i
+    else
+      theirScore += player['Goals'].to_i
+    end
+  }
+  wonGame = ourScore > theirScore ? 1 : 0
+  
+  # store game into db
+  puts "Now inserting game with date: #{gameDate}"
+  db.execute "INSERT INTO game VALUES(#{gameDate}, #{wonGame})"
+  
+  # now add all player performances into db
+  playerData.each { |player|
+    if (NAMES.include? player['Player Name'])
+      db.execute "INSERT INTO performance('date', '#{player.keys.join('\',\'')}') " +
+        "VALUES(#{gameDate}, '#{player.values.join('\',\'')}')"
+    end
+  }
+  
+  puts "Added #{file} with date: #{gameDate}"
+}
+
+# close DB
+db.close
