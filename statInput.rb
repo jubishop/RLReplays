@@ -2,21 +2,9 @@ require 'json'
 require 'PP'
 require 'sqlite3'
 
-class String
-  def titleize
-    split(/(\W)/).map(&:capitalize).join
-  end
-end
-
-class Game
-  attr_accessor :date, :won
-  def initialize(*args)
-    @date, @won = *args
-  end
-end
+require_relative 'replaySupport.rb'
 
 AUTH_KEY = 'DgzegKeRKU4ajZZ9lBXHwx6qUVcZoXzqoDcbBilM'
-NAMES = ['jubi', 'FezTheDispenser']
 
 raise "Usage: ruby statInput.rb <replayFolder>" unless ARGV.first
 replayFolder = ARGV.first
@@ -38,18 +26,21 @@ Dir["#{replayFolder}*"].each { |file|
   end
 
   # upload Replay to ballchasing and wait for processing
-  response = `curl -v -F file=@#{file} -H Authorization:#{AUTH_KEY} https://ballchasing.com/api/v2/upload`
+  response = `curl -s -F file=@#{file} -H Authorization:#{AUTH_KEY} https://ballchasing.com/api/v2/upload`
   replayID = JSON::parse(response)['id']
   
   # get and parse CSV file associated with uploaded replay
   containsJubi, tries = false, 0
   while (not containsJubi and tries < 3)
     sleep 5 # need to sleep until we have it
-    csv_data = `curl -L http://ballchasing.com/dl/stats/players/#{replayID}/#{replayID}-players.csv`
+    csv_data = `curl -s -L http://ballchasing.com/dl/stats/players/#{replayID}/#{replayID}-players.csv`
     containsJubi = csv_data.include? "jubi"
     tries += 1
   end
-  raise "Could not fetch csv" if (tries >= 3)
+  if (tries >= 3)
+    puts "Could not fetch csv for #{file}"
+    next
+  end
 
   header, *rows = csv_data.split("\n")
   headers = header.split(';').map { |header| header.titleize }
